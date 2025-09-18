@@ -9,6 +9,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { TrendingUp, TrendingDown, Weight, Calendar, Target, AlertTriangle } from "lucide-react"
 import { format, differenceInDays } from "date-fns"
 import { es } from "date-fns/locale"
+import { parseYMDToDate } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { useMemo } from 'react'
 
 interface WeightRecord {
   id: string
@@ -37,6 +40,7 @@ interface WeightEvolutionChartsProps {
 
 export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionChartsProps) {
   const [selectedCattle, setSelectedCattle] = useState<string>(cattle[0]?.id || "")
+  const [searchName, setSearchName] = useState<string>("")
 
   // Get weight evolution data for selected cattle
   const getWeightEvolution = () => {
@@ -44,14 +48,14 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
 
     const cattleRecords = records
       .filter((r) => r.cattleId === selectedCattle)
-      .sort((a, b) => new Date(a.weightDate).getTime() - new Date(b.weightDate).getTime())
+      .sort((a, b) => parseYMDToDate(a.weightDate).getTime() - parseYMDToDate(b.weightDate).getTime())
 
     return cattleRecords.map((record, index) => {
-      const date = new Date(record.weightDate)
+      const date = parseYMDToDate(record.weightDate)
       const selectedCattleInfo = cattle.find((c) => c.id === selectedCattle)
 
       // Calculate age in months
-      const birthDate = new Date(selectedCattleInfo?.birthDate || "")
+  const birthDate = parseYMDToDate(selectedCattleInfo?.birthDate || "")
       const ageInDays = differenceInDays(date, birthDate)
       const ageInMonths = Math.floor(ageInDays / 30)
 
@@ -59,7 +63,7 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
       let weightGainRate = 0
       if (index > 0) {
         const prevRecord = cattleRecords[index - 1]
-        const daysDiff = differenceInDays(date, new Date(prevRecord.weightDate))
+  const daysDiff = differenceInDays(date, parseYMDToDate(prevRecord.weightDate))
         const weightDiff = record.weightKg - prevRecord.weightKg
         weightGainRate = daysDiff > 0 ? (weightDiff / daysDiff) * 30 : 0
       }
@@ -84,10 +88,10 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
 
       const expectedWeight = getExpectedWeight(selectedCattleInfo?.breed || "Holstein", ageInMonths)
 
-      return {
-        date: record.weightDate,
-        displayDate: format(date, "dd/MM/yy", { locale: es }),
-        fullDate: format(date, "dd MMMM yyyy", { locale: es }),
+  return {
+  date: record.weightDate,
+  displayDate: format(date, "dd/MM/yy", { locale: es }),
+  fullDate: format(date, "dd MMMM yyyy", { locale: es }),
         weight: record.weightKg,
         weightChange: record.weightChange || 0,
         ageMonths: ageInMonths,
@@ -114,7 +118,7 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
     const lastWeight = weightData[weightData.length - 1].weight
     const totalGain = lastWeight - firstWeight
 
-    const totalDays = differenceInDays(new Date(weightData[weightData.length - 1].date), new Date(weightData[0].date))
+  const totalDays = differenceInDays(parseYMDToDate(weightData[weightData.length - 1].date), parseYMDToDate(weightData[0].date))
 
     const averageGainRate = totalDays > 0 ? (totalGain / totalDays) * 30 : 0
 
@@ -183,19 +187,30 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Seleccionar Vaca</label>
-              <Select value={selectedCattle} onValueChange={setSelectedCattle}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {cattle.map((cow) => (
-                    <SelectItem key={cow.id} value={cow.id}>
-                      {cow.name} ({cow.breed})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-2 block">Buscar / Seleccionar Vaca</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Buscar por nombre..."
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                />
+              </div>
+              <div className="mt-2">
+                <Select value={selectedCattle} onValueChange={setSelectedCattle}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cattle
+                      .filter((cow) => cow.name.toLowerCase().includes(searchName.toLowerCase()))
+                      .map((cow) => (
+                        <SelectItem key={cow.id} value={cow.id}>
+                          {cow.name} ({cow.breed})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-end">
@@ -338,8 +353,8 @@ export function WeightEvolutionCharts({ records, cattle }: WeightEvolutionCharts
         <CardContent>
           <div className="space-y-4">
             {weightData.slice(1).map((record, index) => {
-              const prevRecord = weightData[index]
-              const daysBetween = differenceInDays(new Date(record.date), new Date(prevRecord.date))
+                const prevRecord = weightData[index]
+                const daysBetween = differenceInDays(parseYMDToDate(record.date), parseYMDToDate(prevRecord.date))
 
               return (
                 <div key={record.date} className="flex items-center justify-between p-3 bg-muted rounded-lg">

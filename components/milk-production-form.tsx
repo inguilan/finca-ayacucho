@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Save, X, Milk, Clock } from "lucide-react"
+import { parseYMDToDate } from '@/lib/utils'
 
 interface MilkProductionData {
   cattleId: string
@@ -60,7 +61,8 @@ export function MilkProductionForm({
       const productionDate = new Date(formData.productionDate)
       const today = new Date()
       today.setHours(23, 59, 59, 999) // Set to end of today
-      if (productionDate > today) {
+      const productionLocal = parseYMDToDate(formData.productionDate)
+      if (productionLocal > today) {
         newErrors.productionDate = "La fecha no puede ser futura"
       }
     }

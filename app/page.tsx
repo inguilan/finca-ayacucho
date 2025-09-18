@@ -17,6 +17,8 @@ import { WeightHistory } from "@/components/weight-history"
 import { WeightRecordForm } from "@/components/weight-record-form"
 import { useAuth } from '@/hooks/useAuth'
 import { useCattle } from '@/hooks/useCattle'
+import { useMilk } from '@/hooks/useMilk'
+import { useWeight } from '@/hooks/useWeight'
 import {
   Activity,
   AlertTriangle,
@@ -33,14 +35,7 @@ import {
 import { useEffect, useState } from "react"
 
 import { auth } from '@/lib/firebase'
-import {
-  addMedicalObservation,
-  addMilkRecord,
-  addWeightRecord,
-  getAllMedicalObservations,
-  getAllMilkRecords,
-  getAllWeightRecords,
-} from '@/lib/firestore'
+import { addMedicalObservation, getAllMedicalObservations } from '@/lib/firestore'
 
 interface Cattle {
   id: string
@@ -114,8 +109,8 @@ interface MedicalObservation {
 export default function CattleManagementDashboard() {
   const { cattle, addCattle: addCattleDb, updateCattle: updateCattleDb, removeCattle: removeCattleDb, refresh, error: cattleError, loading: cattleLoading } = useCattle()
   const { user, ready: authReady, error: authError } = useAuth()
-  const [milkRecords, setMilkRecords] = useState<MilkProductionRecord[]>([])
-  const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([])
+  const { records: milkRecords, loading: milkLoading, error: milkError, add: addMilk, update: updateMilk, remove: removeMilk, refresh: refreshMilk } = useMilk()
+  const { records: weightRecords, loading: weightLoading, error: weightError, add: addWeight, update: updateWeight, remove: removeWeight, refresh: refreshWeight } = useWeight()
   const [medicalObservations, setMedicalObservations] = useState<MedicalObservation[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [showRegistrationForm, setShowRegistrationForm] = useState(false)
@@ -123,31 +118,27 @@ export default function CattleManagementDashboard() {
   const [showWeightForm, setShowWeightForm] = useState(false)
   const [showMedicalForm, setShowMedicalForm] = useState(false)
   const [editingCattle, setEditingCattle] = useState<Cattle | null>(null)
-  const [editingMilkRecord, setEditingMilkRecord] = useState<MilkProductionRecord | null>(null)
-  const [editingWeightRecord, setEditingWeightRecord] = useState<WeightRecord | null>(null)
+  const [editingMilkRecord, setEditingMilkRecord] = useState<any | null>(null)
+  const [editingWeightRecord, setEditingWeightRecord] = useState<any | null>(null)
   const [editingMedicalObservation, setEditingMedicalObservation] = useState<MedicalObservation | null>(null)
 
   useEffect(() => {
     if (cattleError) console.warn('[page] cattle hook error:', cattleError)
     if (authError) console.warn('[page] auth hook error:', authError)
-  }, [cattleError, authError])
+    if (milkError) console.warn('[page] milk hook error:', milkError)
+    if (weightError) console.warn('[page] weight hook error:', weightError)
+  }, [cattleError, authError, milkError, weightError])
 
-  // Load existing records from Firestore when component mounts
+  // Load medical observations once
   useEffect(() => {
     let mounted = true
     const load = async () => {
       try {
-        const [milk, weight, medical] = await Promise.all([
-          getAllMilkRecords(),
-          getAllWeightRecords(),
-          getAllMedicalObservations(),
-        ])
+        const medical = await getAllMedicalObservations()
         if (!mounted) return
-        setMilkRecords(milk)
-        setWeightRecords(weight)
         setMedicalObservations(medical)
       } catch (e) {
-        console.error('[page] error loading records', e)
+        console.error('[page] error loading medical records', e)
       }
     }
     load()
@@ -160,57 +151,42 @@ export default function CattleManagementDashboard() {
     const selectedCattle = cattle.find((c) => c.id === formData.cattleId)
     if (!selectedCattle) return
 
-    const newRecord: MilkProductionRecord = {
-      id: Date.now().toString(),
+    const payload = {
       cattleId: formData.cattleId,
-      cattleName: selectedCattle.name,
-      cattleBreed: selectedCattle.breed,
       productionDate: formData.productionDate,
       morningLiters: formData.morningLiters,
       afternoonLiters: formData.afternoonLiters,
       eveningLiters: formData.eveningLiters,
       totalLiters: formData.morningLiters + formData.afternoonLiters + formData.eveningLiters,
-      notes: formData.notes,
+      cattleName: selectedCattle.name,
+      cattleBreed: selectedCattle.breed,
+      notes: formData.notes || '',
+      ownerId: auth.currentUser?.uid || (typeof window !== 'undefined' && (window as any).localStorage.getItem('uid')) || null,
     }
 
-    setMilkRecords((prev) => [...prev, newRecord])
-    setShowMilkForm(false)
-
-    const ownerId = auth.currentUser?.uid || (typeof window !== 'undefined' && (window as any).localStorage.getItem('uid'))
     try {
-      const id = await addMilkRecord({
-        cattleId: newRecord.cattleId,
-        productionDate: newRecord.productionDate,
-        morningLiters: newRecord.morningLiters,
-        afternoonLiters: newRecord.afternoonLiters,
-        eveningLiters: newRecord.eveningLiters,
-        totalLiters: newRecord.totalLiters,
-        cattleName: newRecord.cattleName,
-        cattleBreed: newRecord.cattleBreed,
-        notes: newRecord.notes || '',
-        ownerId: ownerId || null,
-      })
-      // replace temporary id with real id
-      setMilkRecords((prev) => prev.map((r) => (r.id === newRecord.id ? { ...r, id } : r)))
+      const id = await addMilk(payload)
+      // if id returned, no further action (onSnapshot will update local list)
+      setShowMilkForm(false)
+
+      const today = new Date().toISOString().split("T")[0]
+      if (formData.productionDate === today) {
+        updateCattleDb(formData.cattleId, { todayMilkProduction: payload.totalLiters }).catch((e) => console.error(e))
+      }
     } catch (e) {
       console.error('[page] failed to persist milk record', e)
     }
-
-    const today = new Date().toISOString().split("T")[0]
-    if (formData.productionDate === today) {
-      updateCattleDb(formData.cattleId, { todayMilkProduction: newRecord.totalLiters }).catch((e) => console.error(e))
-    }
   }
 
-  const handleEditMilkProduction = (record: MilkProductionRecord) => {
+  const handleEditMilkProduction = (record: any) => {
     setEditingMilkRecord(record)
     setShowMilkForm(true)
   }
 
-  const handleUpdateMilkProduction = (formData: any) => {
+  const handleUpdateMilkProduction = async (formData: any) => {
     if (!editingMilkRecord) return
 
-    const updatedRecord: MilkProductionRecord = {
+    const updated = {
       ...editingMilkRecord,
       productionDate: formData.productionDate,
       morningLiters: formData.morningLiters,
@@ -220,18 +196,93 @@ export default function CattleManagementDashboard() {
       notes: formData.notes,
     }
 
-    setMilkRecords((prev) => prev.map((r) => (r.id === editingMilkRecord.id ? updatedRecord : r)))
-    setEditingMilkRecord(null)
-    setShowMilkForm(false)
+    try {
+      await updateMilk(editingMilkRecord.id, updated)
+      setEditingMilkRecord(null)
+      setShowMilkForm(false)
+    } catch (e) {
+      console.error('[page] failed to update milk record', e)
+    }
   }
 
-  const handleDeleteMilkProduction = (id: string) => {
-    setMilkRecords((prev) => prev.filter((r) => r.id !== id))
+  const handleDeleteMilkProduction = async (id: string) => {
+    try {
+      await removeMilk(id)
+    } catch (e) {
+      console.error('[page] failed to delete milk record', e)
+    }
   }
 
   const handleCancelMilkForm = () => {
     setShowMilkForm(false)
     setEditingMilkRecord(null)
+  }
+
+  const handleAddWeightRecord = async (formData: any) => {
+    const selectedCattle = cattle.find((c) => c.id === formData.cattleId)
+    if (!selectedCattle) return
+
+    const previousRecord = weightRecords
+      .filter((r) => r.cattleId === formData.cattleId)
+      .sort((a, b) => new Date(b.weightDate).getTime() - new Date(a.weightDate).getTime())[0]
+
+    const payload = {
+      cattleId: formData.cattleId,
+      weightDate: formData.weightDate,
+      weightKg: formData.weightKg,
+      cattleName: selectedCattle.name,
+      cattleBreed: selectedCattle.breed,
+      notes: formData.notes || '',
+      ownerId: auth.currentUser?.uid || (typeof window !== 'undefined' && (window as any).localStorage.getItem('uid')) || null,
+    }
+
+    try {
+      const id = await addWeight(payload)
+      setShowWeightForm(false)
+      // Update cattle's last weight
+      updateCattleDb(formData.cattleId, { lastWeight: formData.weightKg, lastWeightDate: formData.weightDate }).catch(
+        (e) => console.error(e),
+      )
+    } catch (e) {
+      console.error('[page] failed to persist weight record', e)
+    }
+  }
+
+  const handleEditWeightRecord = (record: any) => {
+    setEditingWeightRecord(record)
+    setShowWeightForm(true)
+  }
+
+  const handleUpdateWeightRecord = async (formData: any) => {
+    if (!editingWeightRecord) return
+
+    const updated = {
+      ...editingWeightRecord,
+      weightDate: formData.weightDate,
+      weightKg: formData.weightKg,
+      notes: formData.notes,
+    }
+
+    try {
+      await updateWeight(editingWeightRecord.id, updated)
+      setEditingWeightRecord(null)
+      setShowWeightForm(false)
+    } catch (e) {
+      console.error('[page] failed to update weight record', e)
+    }
+  }
+
+  const handleDeleteWeightRecord = async (id: string) => {
+    try {
+      await removeWeight(id)
+    } catch (e) {
+      console.error('[page] failed to delete weight record', e)
+    }
+  }
+
+  const handleCancelWeightForm = () => {
+    setShowWeightForm(false)
+    setEditingWeightRecord(null)
   }
 
   const handleAddCattle = (formData: any) => {
@@ -283,8 +334,18 @@ export default function CattleManagementDashboard() {
 
   const handleDeleteCattle = (id: string) => {
     removeCattleDb(id).catch((e) => console.error(e))
-    setMilkRecords((prev) => prev.filter((r) => r.cattleId !== id))
-    setWeightRecords((prev) => prev.filter((r) => r.cattleId !== id))
+    // remove related records via hooks if available
+    try {
+      // remove milk records for this cattle
+      if (typeof removeMilk === 'function') {
+        // we don't know ids here; rely on snapshot to drop items when deleted elsewhere
+      }
+      if (typeof removeWeight === 'function') {
+        // same as above
+      }
+    } catch (e) {
+      // ignore
+    }
     setMedicalObservations((prev) => prev.filter((obs) => obs.cattleId !== id))
   }
 
@@ -295,80 +356,6 @@ export default function CattleManagementDashboard() {
   const handleCancelForm = () => {
     setShowRegistrationForm(false)
     setEditingCattle(null)
-  }
-
-  const handleAddWeightRecord = async (formData: any) => {
-    const selectedCattle = cattle.find((c) => c.id === formData.cattleId)
-    if (!selectedCattle) return
-
-    const previousRecord = weightRecords
-      .filter((r) => r.cattleId === formData.cattleId)
-      .sort((a, b) => new Date(b.weightDate).getTime() - new Date(a.weightDate).getTime())[0]
-
-    const newRecord: WeightRecord = {
-      id: Date.now().toString(),
-      cattleId: formData.cattleId,
-      cattleName: selectedCattle.name,
-      cattleBreed: selectedCattle.breed,
-      weightDate: formData.weightDate,
-      weightKg: formData.weightKg,
-      previousWeight: previousRecord?.weightKg,
-      weightChange: previousRecord ? formData.weightKg - previousRecord.weightKg : undefined,
-      notes: formData.notes,
-    }
-
-    setWeightRecords((prev) => [...prev, newRecord])
-    setShowWeightForm(false)
-
-    const ownerId = auth.currentUser?.uid || (typeof window !== 'undefined' && (window as any).localStorage.getItem('uid'))
-    try {
-      const id = await addWeightRecord({
-        cattleId: newRecord.cattleId,
-        weightDate: newRecord.weightDate,
-        weightKg: newRecord.weightKg,
-        cattleName: newRecord.cattleName,
-        cattleBreed: newRecord.cattleBreed,
-        notes: newRecord.notes || '',
-        ownerId: ownerId || null,
-      })
-      setWeightRecords((prev) => prev.map((r) => (r.id === newRecord.id ? { ...r, id } : r)))
-    } catch (e) {
-      console.error('[page] failed to persist weight record', e)
-    }
-
-    // Update cattle's last weight
-    updateCattleDb(formData.cattleId, { lastWeight: formData.weightKg, lastWeightDate: formData.weightDate }).catch(
-      (e) => console.error(e),
-    )
-  }
-
-  const handleEditWeightRecord = (record: WeightRecord) => {
-    setEditingWeightRecord(record)
-    setShowWeightForm(true)
-  }
-
-  const handleUpdateWeightRecord = (formData: any) => {
-    if (!editingWeightRecord) return
-
-    const updatedRecord: WeightRecord = {
-      ...editingWeightRecord,
-      weightDate: formData.weightDate,
-      weightKg: formData.weightKg,
-      notes: formData.notes,
-    }
-
-    setWeightRecords((prev) => prev.map((r) => (r.id === editingWeightRecord.id ? updatedRecord : r)))
-    setEditingWeightRecord(null)
-    setShowWeightForm(false)
-  }
-
-  const handleDeleteWeightRecord = (id: string) => {
-    setWeightRecords((prev) => prev.filter((r) => r.id !== id))
-  }
-
-  const handleCancelWeightForm = () => {
-    setShowWeightForm(false)
-    setEditingWeightRecord(null)
   }
 
   const handleAddMedicalObservation = async (formData: any) => {

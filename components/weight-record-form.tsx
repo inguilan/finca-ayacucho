@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Save, X, Weight, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { parseYMDToDate } from '@/lib/utils'
 
 interface WeightRecordData {
   cattleId: string
@@ -53,7 +54,7 @@ export function WeightRecordForm({
     if (!formData.weightDate) {
       newErrors.weightDate = "La fecha es obligatoria"
     } else {
-      const weightDate = new Date(formData.weightDate)
+      const weightDate = parseYMDToDate(formData.weightDate)
       const today = new Date()
       today.setHours(23, 59, 59, 999)
       if (weightDate > today) {
@@ -91,7 +92,7 @@ export function WeightRecordForm({
     selectedCattle && formData.weightKg ? (weightDifference / selectedCattle.lastWeight) * 100 : 0
 
   const getDaysSinceLastWeight = (lastWeightDate: string): number => {
-    const lastDate = new Date(lastWeightDate)
+    const lastDate = parseYMDToDate(lastWeightDate)
     const today = new Date()
     return Math.ceil((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
   }
@@ -189,7 +190,7 @@ export function WeightRecordForm({
                   <div className="text-sm text-muted-foreground">Peso Anterior</div>
                   <div className="text-xl font-bold">{selectedCattle.lastWeight} kg</div>
                   <div className="text-xs text-muted-foreground">
-                    {new Date(selectedCattle.lastWeightDate).toLocaleDateString()}
+                    {parseYMDToDate(selectedCattle.lastWeightDate).toLocaleDateString()}
                   </div>
                 </div>
 

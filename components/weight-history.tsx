@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Search, Edit, Trash2, Calendar, TrendingUp, TrendingDown, Weight, Minus } from "lucide-react"
+import { parseYMDToDate } from '@/lib/utils'
 
 interface WeightRecord {
   id: string
@@ -35,8 +36,8 @@ export function WeightHistory({ records, cattle, onEdit, onDelete }: WeightHisto
   const [sortBy, setSortBy] = useState("date-desc")
 
   const getDateRangeFilter = (dateRange: string, recordDate: string): boolean => {
-    const today = new Date()
-    const recordDateObj = new Date(recordDate)
+  const today = new Date()
+  const recordDateObj = parseYMDToDate(recordDate)
 
     switch (dateRange) {
       case "month":
@@ -66,9 +67,9 @@ export function WeightHistory({ records, cattle, onEdit, onDelete }: WeightHisto
     .sort((a, b) => {
       switch (sortBy) {
         case "date-desc":
-          return new Date(b.weightDate).getTime() - new Date(a.weightDate).getTime()
+          return parseYMDToDate(b.weightDate).getTime() - parseYMDToDate(a.weightDate).getTime()
         case "date-asc":
-          return new Date(a.weightDate).getTime() - new Date(b.weightDate).getTime()
+          return parseYMDToDate(a.weightDate).getTime() - parseYMDToDate(b.weightDate).getTime()
         case "weight-desc":
           return b.weightKg - a.weightKg
         case "weight-asc":
@@ -274,7 +275,7 @@ export function WeightHistory({ records, cattle, onEdit, onDelete }: WeightHisto
                           </Badge>
                           <div className="flex items-center gap-1 text-sm text-muted-foreground">
                             <Calendar className="w-4 h-4" />
-                            {new Date(record.weightDate).toLocaleDateString("es-ES", {
+                            {parseYMDToDate(record.weightDate).toLocaleDateString("es-ES", {
                               weekday: "short",
                               year: "numeric",
                               month: "short",

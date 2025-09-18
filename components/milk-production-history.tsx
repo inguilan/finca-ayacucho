@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Search, Edit, Trash2, Calendar, TrendingUp, TrendingDown, Milk } from "lucide-react"
+import { parseYMDToDate } from '@/lib/utils'
 
 interface MilkProductionRecord {
   id: string
@@ -36,8 +37,8 @@ export function MilkProductionHistory({ records, cattle, onEdit, onDelete }: Mil
   const [sortBy, setSortBy] = useState("date-desc")
 
   const getDateRangeFilter = (dateRange: string, recordDate: string): boolean => {
-    const today = new Date()
-    const recordDateObj = new Date(recordDate)
+  const today = new Date()
+  const recordDateObj = parseYMDToDate(recordDate)
 
     switch (dateRange) {
       case "today":
@@ -237,15 +238,15 @@ export function MilkProductionHistory({ records, cattle, onEdit, onDelete }: Mil
                         >
                           {record.totalLiters.toFixed(1)}L
                         </Badge>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(record.productionDate).toLocaleDateString("es-ES", {
-                            weekday: "short",
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </div>
+                                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                          <Calendar className="w-4 h-4" />
+                                          {parseYMDToDate(record.productionDate).toLocaleDateString("es-ES", {
+                                            weekday: "short",
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                          })}
+                                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
